@@ -76,38 +76,56 @@ def process_zip_files(input_dir, target_dir, zip_prefix):
     target_path.mkdir(exist_ok=True, parents=True)
     processed_path.mkdir(exist_ok=True)
     
-    # Get all zip files and sort them alphanumerically
-    zip_files = sorted([f for f in input_path.glob("*.zip") if f.name.startswith(zip_prefix)])
+    # Get all directories that contain the prefix
+    matching_dirs = [d for d in input_path.iterdir() if d.is_dir() and zip_prefix in d.name]
     
-    if not zip_files:
-        logging.warning(f"No zip files matching prefix '{zip_prefix}' found in {input_dir}")
+    if not matching_dirs:
+        logging.warning(f"No directories matching prefix '{zip_prefix}' found in {input_dir}")
+        logging.info(f"Available items in directory: {[item.name for item in input_path.iterdir()]}")
         return
     
-    logging.info(f"Found {len(zip_files)} zip files to process")
+    logging.info(f"Found {len(matching_dirs)} directories matching prefix '{zip_prefix}'")
     
-    for zip_file in zip_files:
-        logging.info(f"Processing {zip_file.name}")
+    # Process each matching directory
+    for dir_path in matching_dirs:
+        logging.info(f"Processing directory: {dir_path.name}")
         
-        # Check disk space before processing
-        if not check_disk_space(target_path):
-            logging.error("Exiting due to low disk space")
-            sys.exit(1)
+        # Find zip files in this directory
+        zip_files = sorted(dir_path.glob("*.zip"))
         
-        try:
-            # Extract the zip file
-            with zipfile.ZipFile(zip_file, 'r') as zip_ref:
-                logging.info(f"Extracting {zip_file.name} to {target_path}")
-                zip_ref.extractall(target_path)
+        if not zip_files:
+            logging.warning(f"No zip files found in directory {dir_path.name}")
+            continue
+        
+        logging.info(f"Found {len(zip_files)} zip files in {dir_path.name}")
+        
+        for zip_file in zip_files:
+            logging.info(f"Processing {zip_file.name} from {dir_path.name}")
             
-            # Move the processed zip file
-            dest_file = processed_path / zip_file.name
-            logging.info(f"Moving {zip_file.name} to {processed_path}")
-            shutil.move(zip_file, dest_file)
+            # Check disk space before processing
+            if not check_disk_space(target_path):
+                logging.error("Exiting due to low disk space")
+                sys.exit(1)
             
-        except zipfile.BadZipFile:
-            logging.error(f"Error: {zip_file.name} is not a valid zip file")
-        except Exception as e:
-            logging.error(f"Error processing {zip_file.name}: {str(e)}")
+            try:
+                # Extract the zip file
+                with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+                    logging.info(f"Extracting {zip_file.name} to {target_path}")
+                    zip_ref.extractall(target_path)
+                
+                # Create a processed directory within the resource directory if it doesn't exist
+                resource_processed_path = dir_path / "processed"
+                resource_processed_path.mkdir(exist_ok=True)
+                
+                # Move the processed zip file to the resource's processed directory
+                dest_file = resource_processed_path / zip_file.name
+                logging.info(f"Moving {zip_file.name} to {resource_processed_path}")
+                shutil.move(zip_file, dest_file)
+                
+            except zipfile.BadZipFile:
+                logging.error(f"Error: {zip_file.name} is not a valid zip file")
+            except Exception as e:
+                logging.error(f"Error processing {zip_file.name}: {str(e)}")
 
 def main():
     """Main function to parse arguments and process zip files."""
